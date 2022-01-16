@@ -21,39 +21,40 @@ type Chunk struct {
 	data []bool
 }
 
-func NewGame(width int, height int) *Game {
-	rawData := make([]bool, width*height)
-	for i := range rawData {
-		rawData[i] = rand.Intn(100) >= 30
-	}
-
+func NewGame(width int, height int, alivePerc int) *Game {
 	world := make([][]bool, height)
-	for i := range world {
-		world[i], rawData = rawData[:width], rawData[width:]
+	for y := range world {
+		world[y] = make([]bool, width)
+		for x := range world[y] {
+			world[y][x] = rand.Intn(100) < alivePerc
+		}
 	}
-
 	return &Game{world, width, height, time.Now()}
 }
 
-func mod(a, b int) int {
-	return (a%b + b) % b
+func (g *Game) LivingNeighbors(x int, y int) int {
+	mod := func(a, b int) int {
+		return (a%b + b) % b
+	}
+
+	livingNeighbors := 0
+	for sY := -1; sY <= 1; sY++ {
+		for sX := -1; sX <= 1; sX++ {
+			if sX == 0 && sY == 0 {
+				continue
+			}
+			if g.world[mod(y+sY, g.height)][mod(x+sX, g.width)] {
+				livingNeighbors++
+			}
+		}
+	}
+	return livingNeighbors
 }
 
 func (g *Game) ComputeLine(y int) []bool {
 	line := make([]bool, g.width)
 	for x, alive := range g.world[y] {
-		livingNeighbors := 0
-		for sY := -1; sY <= 1; sY++ {
-			for sX := -1; sX <= 1; sX++ {
-				if sX == 0 && sY == 0 {
-					continue
-				}
-				if g.world[mod(y+sY, g.height)][mod(x+sX, g.width)] {
-					livingNeighbors++
-				}
-			}
-		}
-
+		livingNeighbors := g.LivingNeighbors(x, y)
 		if alive && (livingNeighbors == 2 || livingNeighbors == 3) {
 			line[x] = true
 		} else if !alive && livingNeighbors == 3 {
@@ -66,10 +67,7 @@ func (g *Game) ComputeLine(y int) []bool {
 }
 
 func (g *Game) ComputeNextWorld() [][]bool {
-	nextWorld := make([][]bool, g.height)
-
 	chunkChan := make(chan Chunk)
-
 	computeChunk := func(y int) {
 		chunk := Chunk{
 			y,
@@ -82,6 +80,7 @@ func (g *Game) ComputeNextWorld() [][]bool {
 		go computeChunk(y)
 	}
 
+	nextWorld := make([][]bool, g.height)
 	for range nextWorld {
 		chunk := <-chunkChan
 		nextWorld[chunk.y] = chunk.data
@@ -94,8 +93,8 @@ func (g *Game) Update() error {
 	if time.Since(g.lastUpdate).Milliseconds() < 1000/60 {
 		return nil
 	}
-	g.lastUpdate = time.Now()
 
+	g.lastUpdate = time.Now()
 	g.world = g.ComputeNextWorld()
 
 	return nil
@@ -119,10 +118,12 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 
 func main() {
 	const SIZE = 3
+	const ALIVE_PERC = 70
 
-	ebiten.SetWindowSize(800, 800)
+	ebiten.SetWindowSize(640, 640)
 	ebiten.SetWindowTitle("Conway's game of life")
-	if err := ebiten.RunGame(NewGame(120*SIZE, 120*SIZE)); err != nil {
+
+	if err := ebiten.RunGame(NewGame(120*SIZE, 120*SIZE, ALIVE_PERC)); err != nil {
 		log.Fatal(err)
 	}
 }
