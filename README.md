@@ -1,1 +1,3 @@
-# game_of_life_ebiten
+# Game of Life with Go & Ebiten
+
+Parallel line computations using goroutines
